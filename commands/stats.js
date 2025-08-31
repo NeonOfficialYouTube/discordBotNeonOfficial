@@ -1,5 +1,4 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const fetch = require('node-fetch'); // or use global fetch in Node 18+
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -31,7 +30,7 @@ module.exports = {
             const groupsRes = await fetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`);
             const groupsData = await groupsRes.json();
 
-            const groupNames = groupsData.map(g => g.role.name + ' at ' + g.group.name).join('\n') || 'No groups';
+            const groupNames = groupsData.map(g => `${g.role.name} at ${g.group.name}`).join('\n') || 'No groups';
 
             // Create embed
             const embed = new EmbedBuilder()
