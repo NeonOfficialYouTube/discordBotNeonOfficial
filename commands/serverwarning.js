@@ -11,7 +11,7 @@ module.exports = {
         ),
     async execute(interaction) {
         const warningMessage = interaction.options.getString('message');
-        const warningChannel = interaction.guild.channels.cache.find(ch => ch.name === 'announcements'); // change to your channel
+        const warningChannel = interaction.guild.channels.cache.get('1375566168357867590');
 
         if (!warningChannel) {
             return interaction.reply({ content: '❌ Warning channel not found!', ephemeral: true });
