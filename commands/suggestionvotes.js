@@ -1,66 +1,46 @@
 const { getDatabase } = require('../database');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-    name: 'interactionCreate', // must be exactly this
+    data: new SlashCommandBuilder()
+        .setName('suggestionvotes')
+        .setDescription('Shows the votes for a suggestion')
+        .addIntegerOption(option =>
+            option.setName('id')
+                  .setDescription('Suggestion ID')
+                  .setRequired(true)
+        ),
     async execute(interaction) {
-        if (!interaction.isButton()) return; // only handle buttons
-
+        const suggestionId = interaction.options.getInteger('id');
         const db = getDatabase();
-        const userId = interaction.user.id;
-        const customId = interaction.customId;
-
-        // Check if button is a suggestion vote button
-        const match = customId.match(/^suggestion_(upvote|downvote)_(\d+)$/);
-        if (!match) return;
-
-        const voteType = match[1]; // 'upvote' or 'downvote'
-        const suggestionId = parseInt(match[2]);
-
-        console.log(`Button clicked by ${interaction.user.tag}: ${customId}`); // DEBUG
 
         try {
-            // Check if user already voted
-            const existingVote = await db.get(
-                'SELECT vote_type FROM suggestionVotes WHERE suggestion_id = ? AND user_id = ?',
-                [suggestionId, userId]
+            const votes = await db.all(
+                'SELECT user_id, vote_type FROM suggestionVotes WHERE suggestion_id = ?',
+                [suggestionId]
             );
 
-            if (existingVote) {
-                if (existingVote.vote_type === voteType) {
-                    return interaction.reply({
-                        content: `❌ You already ${voteType}d this suggestion.`,
-                        ephemeral: true
-                    });
-                } else {
-                    // User is switching vote
-                    await db.run(
-                        'UPDATE suggestionVotes SET vote_type = ? WHERE suggestion_id = ? AND user_id = ?',
-                        [voteType, suggestionId, userId]
-                    );
-                    return interaction.reply({
-                        content: `✅ You changed your vote to a ${voteType}.`,
-                        ephemeral: true
-                    });
-                }
+            if (!votes.length) {
+                return interaction.reply({
+                    content: '❌ No one has voted on this suggestion yet.',
+                    ephemeral: true
+                });
             }
 
-            // Insert new vote
-            await db.run(
-                'INSERT INTO suggestionVotes (suggestion_id, user_id, vote_type) VALUES (?, ?, ?)',
-                [suggestionId, userId, voteType]
-            );
+            const upvotes = votes.filter(v => v.vote_type === 'upvote').length;
+            const downvotes = votes.filter(v => v.vote_type === 'downvote').length;
 
             return interaction.reply({
-                content: `✅ Your ${voteType} has been counted!`,
+                content: `Suggestion #${suggestionId} has:\n👍 ${upvotes} upvotes\n👎 ${downvotes} downvotes`,
                 ephemeral: true
             });
-
         } catch (err) {
             console.error(err);
             return interaction.reply({
-                content: '❌ An error occurred while recording your vote.',
+                content: '❌ An error occurred while fetching votes.',
                 ephemeral: true
             });
         }
     }
 };
+
