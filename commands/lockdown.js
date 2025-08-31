@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -10,7 +10,7 @@ module.exports = {
                   .setRequired(true)
         ),
     async execute(interaction) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: '❌ You need to be an admin to use this.', ephemeral: true });
         }
 
@@ -19,13 +19,18 @@ module.exports = {
 
         try {
             // Loop through all channels
-            interaction.guild.channels.cache.forEach(async channel => {
-                await channel.permissionOverwrites.edit(everyoneRole, { SEND_MESSAGES: !lock });
-            });
+            for (const [, channel] of interaction.guild.channels.cache) {
+                // Only lock text & threads
+                if (channel.isTextBased()) {
+                    await channel.permissionOverwrites.edit(everyoneRole, {
+                        SendMessages: !lock,
+                        AddReactions: !lock,
+                    });
+                }
+            }
 
             await interaction.reply({
-                content: lock ? '🔒 Server is now in lockdown!' : '🔓 Server has been unlocked!',
-                ephemeral: false
+                content: lock ? '🔒 Server is now in full lockdown!' : '🔓 Server has been unlocked!',
             });
         } catch (err) {
             console.error(err);
