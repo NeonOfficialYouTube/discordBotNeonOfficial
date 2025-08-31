@@ -17,24 +17,32 @@ module.exports = {
         const lock = interaction.options.getBoolean('lock');
         const everyoneRole = interaction.guild.roles.everyone;
 
+        // Reply immediately to avoid timeout
+        await interaction.reply({
+            content: lock ? '🔒 Locking server...' : '🔓 Unlocking server...',
+            ephemeral: true
+        });
+
         try {
-            // Loop through all channels
+            const promises = [];
             for (const [, channel] of interaction.guild.channels.cache) {
-                // Only lock text & threads
                 if (channel.isTextBased()) {
-                    await channel.permissionOverwrites.edit(everyoneRole, {
-                        SendMessages: !lock,
-                        AddReactions: !lock,
-                    });
+                    promises.push(
+                        channel.permissionOverwrites.edit(everyoneRole, {
+                            SendMessages: !lock,
+                            AddReactions: !lock,
+                        })
+                    );
                 }
             }
+            await Promise.all(promises);
 
-            await interaction.reply({
-                content: lock ? '🔒 Server is now in full lockdown!' : '🔓 Server has been unlocked!',
+            await interaction.editReply({
+                content: lock ? '🔒 Server is now in full lockdown!' : '🔓 Server has been unlocked!'
             });
         } catch (err) {
             console.error(err);
-            interaction.reply({ content: '❌ An error occurred while changing permissions.', ephemeral: true });
+            interaction.editReply({ content: '❌ An error occurred while changing permissions.' });
         }
     }
 };
