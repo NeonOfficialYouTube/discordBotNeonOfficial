@@ -1,48 +1,45 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('lockdown')
-        .setDescription('Lock or unlock the entire server')
+        .setDescription('Lock or unlock all channels for @everyone')
         .addBooleanOption(option =>
             option.setName('lock')
-                  .setDescription('true to lockdown, false to unlock')
+                  .setDescription('True to lock, false to unlock')
                   .setRequired(true)
         ),
     async execute(interaction) {
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            return interaction.reply({ content: '❌ You need to be an admin to use this.', ephemeral: true });
+        // Make sure the user has admin permissions
+        if (!interaction.member.permissions.has('Administrator')) {
+            return interaction.reply({ content: '❌ You need Administrator to use this command.', ephemeral: true });
         }
 
         const lock = interaction.options.getBoolean('lock');
         const everyoneRole = interaction.guild.roles.everyone;
 
-        // Reply immediately to avoid timeout
-        await interaction.reply({
-            content: lock ? '🔒 Locking server...' : '🔓 Unlocking server...',
-            ephemeral: true
-        });
+        let failedChannels = [];
 
-        try {
-            const promises = [];
-            for (const [, channel] of interaction.guild.channels.cache) {
-                if (channel.isTextBased()) {
-                    promises.push(
-                        channel.permissionOverwrites.edit(everyoneRole, {
-                            SendMessages: !lock,
-                            AddReactions: !lock,
-                        })
-                    );
-                }
+        await interaction.reply({ content: `${lock ? 'Locking' : 'Unlocking'} channels...`, ephemeral: true });
+
+        for (const channel of interaction.guild.channels.cache.values()) {
+            try {
+                // Skip if bot can't manage the channel
+                if (!channel.permissionsFor(interaction.guild.members.me).has('ManageChannels')) continue;
+
+                await channel.permissionOverwrites.edit(everyoneRole, {
+                    SendMessages: !lock,
+                    AddReactions: !lock,
+                });
+            } catch (err) {
+                failedChannels.push(channel.name);
             }
-            await Promise.all(promises);
+        }
 
-            await interaction.editReply({
-                content: lock ? '🔒 Server is now in full lockdown!' : '🔓 Server has been unlocked!'
-            });
-        } catch (err) {
-            console.error(err);
-            interaction.editReply({ content: '❌ An error occurred while changing permissions.' });
+        if (failedChannels.length) {
+            interaction.editReply(`✅ Done, but failed to change permissions for: ${failedChannels.join(', ')}`);
+        } else {
+            interaction.editReply(`✅ All channels have been ${lock ? 'locked' : 'unlocked'}.`);
         }
     }
 };
