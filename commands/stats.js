@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const fetch = require('node-fetch');
+// const fetch = require('node-fetch'); // REMOVE THIS
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -14,13 +14,8 @@ module.exports = {
         const username = interaction.options.getString('username');
 
         try {
-            // Fetch basic user info
+            // Node 18+ has global fetch
             const userRes = await fetch(`https://api.roblox.com/users/get-by-username?username=${encodeURIComponent(username)}`);
-            
-            if (!userRes.ok) {
-                return interaction.reply({ content: `❌ Failed to fetch Roblox user info (status: ${userRes.status}).`, ephemeral: true });
-            }
-
             const userData = await userRes.json();
 
             if (userData.errorMessage) {
@@ -28,20 +23,13 @@ module.exports = {
             }
 
             const userId = userData.Id;
-
-            // Fetch avatar thumbnail
             const avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
 
-            // Fetch groups
             const groupsRes = await fetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`);
-            if (!groupsRes.ok) {
-                return interaction.reply({ content: `❌ Failed to fetch groups (status: ${groupsRes.status}).`, ephemeral: true });
-            }
             const groupsData = await groupsRes.json();
 
             const groupNames = groupsData.data?.map(g => `${g.role.name} at ${g.group.name}`).join('\n') || 'No groups';
 
-            // Build embed
             const embed = new EmbedBuilder()
                 .setTitle(`${userData.Username}'s Roblox Stats`)
                 .setThumbnail(avatarUrl)
@@ -54,7 +42,6 @@ module.exports = {
                 .setFooter({ text: 'Roblox Stats' });
 
             await interaction.reply({ embeds: [embed] });
-
         } catch (err) {
             console.error(err);
             await interaction.reply({ content: '❌ An unexpected error occurred while fetching Roblox data.', ephemeral: true });
