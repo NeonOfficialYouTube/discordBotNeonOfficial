@@ -51,6 +51,19 @@ async function startBot() {
     try {
         await initializeDatabase();
         logger.info('Database initialized successfully');
+
+        const db = require('./database').getDatabase(); // make sure getDatabase exists in your database.js
+
+await db.run(`
+    CREATE TABLE IF NOT EXISTS suggestionVotes (
+        suggestion_id INTEGER,
+        user_id TEXT,
+        vote_type TEXT,
+        PRIMARY KEY (suggestion_id, user_id)
+    )
+`);
+
+logger.info('Suggestion votes table ensured');
         
         await client.login(config.token);
         logger.info('Bot started successfully');
