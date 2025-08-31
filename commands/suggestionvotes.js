@@ -1,34 +1,66 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getDatabase } = require('../database');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('suggestionvotes')
-        .setDescription('See who voted on a suggestion')
-        .addIntegerOption(option =>
-            option.setName('id')
-                .setDescription('The suggestion ID')
-                .setRequired(true)
-        ),
-
+    name: 'interactionCreate', // must be exactly this
     async execute(interaction) {
-        const suggestionId = interaction.options.getInteger('id');
+        if (!interaction.isButton()) return; // only handle buttons
+
         const db = getDatabase();
+        const userId = interaction.user.id;
+        const customId = interaction.customId;
 
-        // Get all votes for this suggestion
-        const votes = await db.all(
-            'SELECT user_id, vote_type FROM suggestionVotes WHERE suggestion_id = ?',
-            [suggestionId]
-        );
+        // Check if button is a suggestion vote button
+        const match = customId.match(/^suggestion_(upvote|downvote)_(\d+)$/);
+        if (!match) return;
 
-        if (!votes.length) return interaction.reply('No votes yet for this suggestion.');
+        const voteType = match[1]; // 'upvote' or 'downvote'
+        const suggestionId = parseInt(match[2]);
 
-        const embed = new EmbedBuilder()
-            .setTitle(`Votes for Suggestion ID ${suggestionId}`)
-            .setDescription(votes.map(v => `<@${v.user_id}>: ${v.vote_type}`).join('\n'))
-            .setColor(0x00FFFF)
-            .setTimestamp();
+        console.log(`Button clicked by ${interaction.user.tag}: ${customId}`); // DEBUG
 
-        return interaction.reply({ embeds: [embed], ephemeral: true });
+        try {
+            // Check if user already voted
+            const existingVote = await db.get(
+                'SELECT vote_type FROM suggestionVotes WHERE suggestion_id = ? AND user_id = ?',
+                [suggestionId, userId]
+            );
+
+            if (existingVote) {
+                if (existingVote.vote_type === voteType) {
+                    return interaction.reply({
+                        content: `❌ You already ${voteType}d this suggestion.`,
+                        ephemeral: true
+                    });
+                } else {
+                    // User is switching vote
+                    await db.run(
+                        'UPDATE suggestionVotes SET vote_type = ? WHERE suggestion_id = ? AND user_id = ?',
+                        [voteType, suggestionId, userId]
+                    );
+                    return interaction.reply({
+                        content: `✅ You changed your vote to a ${voteType}.`,
+                        ephemeral: true
+                    });
+                }
+            }
+
+            // Insert new vote
+            await db.run(
+                'INSERT INTO suggestionVotes (suggestion_id, user_id, vote_type) VALUES (?, ?, ?)',
+                [suggestionId, userId, voteType]
+            );
+
+            return interaction.reply({
+                content: `✅ Your ${voteType} has been counted!`,
+                ephemeral: true
+            });
+
+        } catch (err) {
+            console.error(err);
+            return interaction.reply({
+                content: '❌ An error occurred while recording your vote.',
+                ephemeral: true
+            });
+        }
     }
 };
