@@ -1,6 +1,6 @@
 const config = {
     // Bot configuration
-    token: process.env.DISCORD_TOKEN || 'your_bot_token_here',
+    token: process.env.DISCORD_TOKEN || '',
     clientId: process.env.CLIENT_ID || 'your_client_id_here',
     guildId: process.env.GUILD_ID || null,
     
