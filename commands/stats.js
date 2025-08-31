@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const fetch = require('node-fetch');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -13,8 +14,13 @@ module.exports = {
         const username = interaction.options.getString('username');
 
         try {
-            // Get basic user info
-            const userRes = await fetch(`https://api.roblox.com/users/get-by-username?username=${username}`);
+            // Fetch basic user info
+            const userRes = await fetch(`https://api.roblox.com/users/get-by-username?username=${encodeURIComponent(username)}`);
+            
+            if (!userRes.ok) {
+                return interaction.reply({ content: `❌ Failed to fetch Roblox user info (status: ${userRes.status}).`, ephemeral: true });
+            }
+
             const userData = await userRes.json();
 
             if (userData.errorMessage) {
@@ -23,16 +29,19 @@ module.exports = {
 
             const userId = userData.Id;
 
-            // Get avatar thumbnail
+            // Fetch avatar thumbnail
             const avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
 
-            // Optional: Get groups
+            // Fetch groups
             const groupsRes = await fetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`);
+            if (!groupsRes.ok) {
+                return interaction.reply({ content: `❌ Failed to fetch groups (status: ${groupsRes.status}).`, ephemeral: true });
+            }
             const groupsData = await groupsRes.json();
 
-            const groupNames = groupsData.map(g => `${g.role.name} at ${g.group.name}`).join('\n') || 'No groups';
+            const groupNames = groupsData.data?.map(g => `${g.role.name} at ${g.group.name}`).join('\n') || 'No groups';
 
-            // Create embed
+            // Build embed
             const embed = new EmbedBuilder()
                 .setTitle(`${userData.Username}'s Roblox Stats`)
                 .setThumbnail(avatarUrl)
@@ -48,7 +57,7 @@ module.exports = {
 
         } catch (err) {
             console.error(err);
-            interaction.reply({ content: '❌ An error occurred while fetching Roblox data.', ephemeral: true });
+            await interaction.reply({ content: '❌ An unexpected error occurred while fetching Roblox data.', ephemeral: true });
         }
     }
 };
