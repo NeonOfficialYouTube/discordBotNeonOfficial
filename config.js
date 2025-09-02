@@ -12,7 +12,8 @@ const config = {
         suggestions: process.env.SUGGESTIONS_CHANNEL || null,
         tickets: process.env.TICKETS_CHANNEL || null,
         logs: process.env.LOGS_CHANNEL || null,
-        verification: process.env.VERIFICATION_CHANNEL || null
+        verification: process.env.VERIFICATION_CHANNEL || null,
+        loaRequests: process.env.LOA_CHANNEL || null // <-- new LOA channel
     },
     
     // Role IDs
