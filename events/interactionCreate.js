@@ -2,7 +2,6 @@ const { EmbedBuilder } = require('discord.js');
 const { getDatabase } = require('../database');
 const config = require('../config');
 const logger = require('../utils/logger');
-const { verifyRobloxAccount } = require('../utils/roblox');
 
 module.exports = {
     name: 'interactionCreate',
@@ -49,8 +48,15 @@ async function handleButton(interaction) {
     try {
         if (customId.startsWith('suggestion_')) {
             await handleSuggestionVote(interaction, db, customId);
-        } else if (customId.startsWith('verify_')) {
-            await handleVerification(interaction, db, customId);
+        } else if (customId === 'verify_button') { // Discord verification button
+            const member = interaction.member;
+
+            if (member.roles.cache.has(config.roles.verified)) {
+                return interaction.reply({ content: 'You are already verified!', ephemeral: true });
+            }
+
+            await member.roles.add(config.roles.verified);
+            return interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
         } else if (customId.startsWith('ticket_close_')) {
             await handleTicketClose(interaction, db, customId);
         }
@@ -67,7 +73,6 @@ async function handleSuggestionVote(interaction, db, customId) {
     const [, action, suggestionId] = customId.split('_');
     const userId = interaction.user.id;
     
-    // Check if suggestion exists
     const suggestion = await db.get(
         'SELECT * FROM suggestions WHERE id = ?',
         [suggestionId]
@@ -80,7 +85,6 @@ async function handleSuggestionVote(interaction, db, customId) {
         });
     }
     
-    // Prevent users from voting on their own suggestions
     if (suggestion.user_id === userId) {
         return interaction.reply({
             content: '❌ You cannot vote on your own suggestion.',
@@ -88,20 +92,17 @@ async function handleSuggestionVote(interaction, db, customId) {
         });
     }
     
-    // Update vote count
     const column = action === 'upvote' ? 'upvotes' : 'downvotes';
     await db.run(
         `UPDATE suggestions SET ${column} = ${column} + 1 WHERE id = ?`,
         [suggestionId]
     );
     
-    // Get updated suggestion
     const updatedSuggestion = await db.get(
         'SELECT * FROM suggestions WHERE id = ?',
         [suggestionId]
     );
     
-    // Update embed with new vote counts
     const embed = EmbedBuilder.from(interaction.message.embeds[0])
         .setFields(
             { name: '👍 Upvotes', value: updatedSuggestion.upvotes.toString(), inline: true },
@@ -117,70 +118,10 @@ async function handleSuggestionVote(interaction, db, customId) {
     logger.info(`${interaction.user.tag} ${action}d suggestion ${suggestionId}`);
 }
 
-async function handleVerification(interaction, db, customId) {
-    const [, discordId, robloxId, verificationCode] = customId.split('_');
-    
-    // Check if this is the correct user
-    if (interaction.user.id !== discordId) {
-        return interaction.reply({
-            content: '❌ This verification is not for you.',
-            ephemeral: true
-        });
-    }
-    
-    await interaction.deferReply({ ephemeral: true });
-    
-    try {
-        // Verify the Roblox account
-        const isVerified = await verifyRobloxAccount(robloxId, verificationCode);
-        
-        if (!isVerified.success) {
-            return interaction.editReply({
-                content: `❌ Verification failed: ${isVerified.error}`
-            });
-        }
-        
-        // Add verification to database
-        await db.run(
-            'INSERT INTO verification (discord_id, roblox_id, roblox_username, guild_id) VALUES (?, ?, ?, ?)',
-            [discordId, robloxId, isVerified.username, interaction.guild.id]
-        );
-        
-        // Add verified role if configured
-        if (config.roles.verified) {
-            const member = await interaction.guild.members.fetch(discordId);
-            const verifiedRole = interaction.guild.roles.cache.get(config.roles.verified);
-            
-            if (verifiedRole) {
-                await member.roles.add(verifiedRole);
-            }
-        }
-        
-        const successEmbed = new EmbedBuilder()
-            .setTitle('✅ Verification Successful!')
-            .setDescription(`Your Discord account has been successfully linked to **${isVerified.username}** on Roblox.`)
-            .setColor('#00ff00')
-            .setTimestamp();
-        
-        await interaction.editReply({
-            embeds: [successEmbed]
-        });
-        
-        logger.info(`${interaction.user.tag} successfully verified as ${isVerified.username} (${robloxId})`);
-        
-    } catch (error) {
-        logger.error('Verification error:', error);
-        await interaction.editReply({
-            content: '❌ An error occurred during verification. Please try again later.'
-        });
-    }
-}
-
 async function handleTicketClose(interaction, db, customId) {
     const ticketId = customId.replace('ticket_close_', '');
     const userId = interaction.user.id;
     
-    // Get ticket info
     const ticket = await db.get(
         'SELECT * FROM tickets WHERE ticket_id = ? AND status = "open"',
         [ticketId]
@@ -193,7 +134,6 @@ async function handleTicketClose(interaction, db, customId) {
         });
     }
     
-    // Check if user can close this ticket
     const canClose = ticket.user_id === userId || 
                     interaction.member.permissions.has('MANAGE_CHANNELS') ||
                     (config.roles.admin && interaction.member.roles.cache.has(config.roles.admin)) ||
@@ -206,7 +146,6 @@ async function handleTicketClose(interaction, db, customId) {
         });
     }
     
-    // Update ticket status
     await db.run(
         'UPDATE tickets SET status = "closed", closed_at = CURRENT_TIMESTAMP, closed_by = ? WHERE ticket_id = ?',
         [userId, ticketId]
@@ -220,7 +159,6 @@ async function handleTicketClose(interaction, db, customId) {
     
     await interaction.reply({ embeds: [closureEmbed] });
     
-    // Delete channel after delay
     setTimeout(async () => {
         try {
             await interaction.channel.delete();
