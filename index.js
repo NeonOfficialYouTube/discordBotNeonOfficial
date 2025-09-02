@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
@@ -46,6 +46,51 @@ for (const file of eventFiles) {
     logger.info(`Loaded event: ${event.name}`);
 }
 
+// 🔹 LOA Button Handling
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isButton()) return;
+
+    const [action, userId] = interaction.customId.split('_');
+    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+
+    if (!member) {
+        return interaction.reply({ content: '⚠️ User not found in this server.', ephemeral: true });
+    }
+
+    // Only allow YOU and JOHNNY to approve/deny
+    const allowedUsers = ['YOUR_USER_ID', 'JOHNNY_USER_ID']; // replace with your IDs
+    if (!allowedUsers.includes(interaction.user.id)) {
+        return interaction.reply({ content: '🚫 You cannot approve or deny LOAs.', ephemeral: true });
+    }
+
+    if (action === 'approve') {
+        const loaRole = interaction.guild.roles.cache.find(r => r.name === 'Leave Of Absence');
+        if (!loaRole) {
+            return interaction.reply({ content: '⚠️ The **Leave Of Absence** role was not found.', ephemeral: true });
+        }
+
+        await member.roles.add(loaRole).catch(() => null);
+
+        try {
+            await member.send(`✅ Your LOA request has been **approved**. You now have the Leave Of Absence role.`);
+        } catch {
+            console.log(`Could not DM ${member.user.tag}`);
+        }
+
+        await interaction.update({ content: `✅ Approved by ${interaction.user.tag}`, components: [], embeds: interaction.message.embeds });
+    }
+
+    if (action === 'deny') {
+        try {
+            await member.send(`❌ Your LOA request has been **denied**.`);
+        } catch {
+            console.log(`Could not DM ${member.user.tag}`);
+        }
+
+        await interaction.update({ content: `❌ Denied by ${interaction.user.tag}`, components: [], embeds: interaction.message.embeds });
+    }
+});
+
 // Initialize database and start bot
 async function startBot() {
     try {
@@ -54,16 +99,16 @@ async function startBot() {
 
         const db = require('./database').getDatabase(); // make sure getDatabase exists in your database.js
 
-await db.run(`
-    CREATE TABLE IF NOT EXISTS suggestionVotes (
-        suggestion_id INTEGER,
-        user_id TEXT,
-        vote_type TEXT,
-        PRIMARY KEY (suggestion_id, user_id)
-    )
-`);
+        await db.run(`
+            CREATE TABLE IF NOT EXISTS suggestionVotes (
+                suggestion_id INTEGER,
+                user_id TEXT,
+                vote_type TEXT,
+                PRIMARY KEY (suggestion_id, user_id)
+            )
+        `);
 
-logger.info('Suggestion votes table ensured');
+        logger.info('Suggestion votes table ensured');
         
         await client.login(config.token);
         logger.info('Bot started successfully');
