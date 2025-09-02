@@ -1,0 +1,24 @@
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const config = require('./config'); // adjust path if needed
+
+async function sendVerificationEmbed(client) {
+    const channel = await client.channels.fetch(config.channels.verification);
+    if (!channel) return console.log('Verification channel not found');
+
+    const embed = new EmbedBuilder()
+        .setTitle('✅ Verify Yourself')
+        .setDescription('Press the button below to get verified and access the server!')
+        .setColor('#5865F2')
+        .setTimestamp();
+
+    const button = new ButtonBuilder()
+        .setCustomId('verify_button')
+        .setLabel('VERIFY')
+        .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder().addComponents(button);
+
+    await channel.send({ embeds: [embed], components: [row] });
+}
+
+module.exports = { sendVerificationEmbed };
