@@ -58,10 +58,12 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     // Only allow YOU and JOHNNY to approve/deny
-    const allowedUsers = ['YOUR_USER_ID', 'JOHNNY_USER_ID']; // replace with your IDs
+    const allowedUsers = ['1345050725637685288', '1320938370586902609']; // replace with your IDs
     if (!allowedUsers.includes(interaction.user.id)) {
         return interaction.reply({ content: '🚫 You cannot approve or deny LOAs.', ephemeral: true });
     }
+
+    const db = require('./database').getDatabase();
 
     if (action === 'approve') {
         const loaRole = interaction.guild.roles.cache.find(r => r.name === 'Leave Of Absence');
@@ -70,6 +72,23 @@ client.on(Events.InteractionCreate, async interaction => {
         }
 
         await member.roles.add(loaRole).catch(() => null);
+
+        // 🔹 Get duration from database (assumes /requestLOA stored it in "days" column)
+        const row = await db.get(`SELECT days FROM loaRequests WHERE user_id = ?`, [userId]);
+        if (row && row.days) {
+            const durationMs = row.days * 24 * 60 * 60 * 1000;
+
+            setTimeout(async () => {
+                if (member.roles.cache.has(loaRole.id)) {
+                    await member.roles.remove(loaRole).catch(() => null);
+                    try {
+                        await member.send(`⏳ Your **Leave Of Absence** has ended. The role has been removed.`);
+                    } catch {
+                        console.log(`Could not DM ${member.user.tag}`);
+                    }
+                }
+            }, durationMs);
+        }
 
         try {
             await member.send(`✅ Your LOA request has been **approved**. You now have the Leave Of Absence role.`);
@@ -108,7 +127,15 @@ async function startBot() {
             )
         `);
 
-        logger.info('Suggestion votes table ensured');
+        // 🔹 Table for LOA requests (if not already created)
+        await db.run(`
+            CREATE TABLE IF NOT EXISTS loaRequests (
+                user_id TEXT PRIMARY KEY,
+                days INTEGER
+            )
+        `);
+
+        logger.info('Suggestion votes + LOA tables ensured');
         
         await client.login(config.token);
         logger.info('Bot started successfully');
