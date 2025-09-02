@@ -1,59 +1,78 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const config = require('../config');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('requestloa')
-        .setDescription('Request a Leave of Absence (LOA)')
+        .setDescription('Request a Leave Of Absence')
         .addStringOption(option =>
             option.setName('reason')
-                .setDescription('Reason for LOA')
+                .setDescription('Reason for leave')
                 .setRequired(true))
         .addIntegerOption(option =>
             option.setName('days')
-                .setDescription('Number of days (max 20)')
-                .setRequired(true)),
-
+                .setDescription('Number of days off (max 20)')
+                .setRequired(true)
+                .setMaxValue(20)),
     async execute(interaction) {
         const reason = interaction.options.getString('reason');
         const days = interaction.options.getInteger('days');
 
-        // enforce 20-day limit
-        if (days > 20) {
-            return interaction.reply({ content: '🚫 LOA cannot be longer than **20 days**.', ephemeral: true });
-        }
+        const channel = interaction.guild.channels.cache.get(config.channels.loaRequests);
+        if (!channel) return interaction.reply({ content: 'LOA request channel not found.', ephemeral: true });
 
-        // Channel where LOA requests go
-        const loaChannelId = '1412198885312430180'; // replace with channel ID like "123456789"
-        const loaChannel = interaction.client.channels.cache.get(loaChannelId);
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('loa-yes')
+                    .setLabel('YES')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('loa-no')
+                    .setLabel('NO')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-        if (!loaChannel) {
-            return interaction.reply({ content: '⚠️ Could not find the LOA requests channel.', ephemeral: true });
-        }
+        const message = await channel.send({
+            content: `New LOA request from <@${interaction.user.id}>`,
+            embeds: [{
+                title: 'Leave Of Absence Request',
+                fields: [
+                    { name: 'Player', value: interaction.user.tag, inline: true },
+                    { name: 'Days', value: `${days}`, inline: true },
+                    { name: 'Reason', value: reason }
+                ],
+                color: 0x00FFFF,
+                timestamp: new Date()
+            }],
+            components: [row]
+        });
 
-        // Create the embed
-        const embed = new EmbedBuilder()
-            .setTitle('📌 New Leave of Absence Request')
-            .setColor(0xFFD700)
-            .addFields(
-                { name: 'Staff Member', value: `${interaction.user.tag}`, inline: true },
-                { name: 'Days Requested', value: `${days}`, inline: true },
-                { name: 'Reason', value: reason }
-            )
-            .setTimestamp();
+        await interaction.reply({ content: 'Your LOA request has been sent!', ephemeral: true });
 
-        // Approve/deny buttons
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`approve_${interaction.user.id}`)
-                .setLabel('✅ Approve')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId(`deny_${interaction.user.id}`)
-                .setLabel('❌ Deny')
-                .setStyle(ButtonStyle.Danger)
-        );
+        // Only allow you and Johnny to approve/deny
+        const allowedUsers = ['1345050725637685288', '1320938370586902609']; // replace with actual Discord IDs
 
-        await loaChannel.send({ embeds: [embed], components: [row] });
-        await interaction.reply({ content: '✅ Your LOA request has been submitted for review.', ephemeral: true });
+        const collector = message.createMessageComponentCollector({
+            filter: i => allowedUsers.includes(i.user.id),
+            componentType: 'BUTTON',
+            time: 86400000 // 24 hours
+        });
+
+        collector.on('collect', async i => {
+            if (i.customId === 'loa-yes') {
+                const loaRole = interaction.guild.roles.cache.find(r => r.name === 'Leave Of Absence');
+                if (loaRole) {
+                    const member = await interaction.guild.members.fetch(interaction.user.id);
+                    await member.roles.add(loaRole);
+                    await i.user.send(`${interaction.user.tag}'s LOA request has been approved.`);
+                    await interaction.user.send('Your Leave Of Absence has been approved!');
+                }
+                await i.update({ content: 'LOA approved ✅', components: [] });
+            } else if (i.customId === 'loa-no') {
+                await interaction.user.send('Your Leave Of Absence request was not approved.');
+                await i.update({ content: 'LOA denied ❌', components: [] });
+            }
+        });
     }
 };
