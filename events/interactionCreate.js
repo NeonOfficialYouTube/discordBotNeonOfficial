@@ -4,7 +4,8 @@ const { getDatabase } = require('../database');
 module.exports = {
     name: 'interactionCreate',
     async execute(interaction, client) {
-        // 🔹 Handle Slash Commands
+
+        // 🔹 Slash Commands
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
@@ -23,8 +24,9 @@ module.exports = {
             return;
         }
 
-        // 🔹 Handle Buttons
+        // 🔹 Buttons
         if (interaction.isButton()) {
+
             // ✅ Verification Button
             if (interaction.customId.startsWith('verify_')) {
                 try {
@@ -34,27 +36,23 @@ module.exports = {
                     }
 
                     const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                    if (!member) {
-                        return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
-                    }
+                    if (!member) return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
 
-                    const loaRole = interaction.guild.roles.cache.get('1412863370108993598'); // ← put your role ID here
-                    
-                    if (!role) {
-                        return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
-                    }
+                    const verifiedRole = interaction.guild.roles.cache.get('1412863370108993598'); // ← your verified role ID
+                    if (!verifiedRole) return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
 
-                    await member.roles.add(role).catch(() => null);
+                    await member.roles.add(verifiedRole).catch(err => console.error('Error adding verified role:', err));
 
                     await interaction.update({
                         content: '✅ You have been verified!',
                         embeds: [],
                         components: []
                     });
+
                 } catch (err) {
                     console.error('Verification button error:', err);
                     if (!interaction.replied) {
-                        await interaction.reply({ content: 'There was an error verifying you.', ephemeral: true });
+                        await interaction.reply({ content: '❌ There was an error verifying you.', ephemeral: true });
                     }
                 }
                 return;
@@ -64,24 +62,24 @@ module.exports = {
             if (interaction.customId.startsWith('loa-')) {
                 try {
                     const [_, action, requesterId] = interaction.customId.split('-'); // e.g. "loa-yes-USERID"
-                    const allowedUsers = ['1345050725637685288', '1320938370586902609']; // Approvers only
+                    const allowedUsers = ['1345050725637685288', '1320938370586902609']; // approvers
 
                     if (!allowedUsers.includes(interaction.user.id)) {
                         return interaction.reply({ content: '❌ You are not allowed to approve/deny LOA requests.', ephemeral: true });
                     }
 
                     const member = await interaction.guild.members.fetch(requesterId).catch(() => null);
-                    if (!member) {
-                        return interaction.reply({ content: '❌ User not found in the server.', ephemeral: true });
-                    }
+                    if (!member) return interaction.reply({ content: '❌ User not found in the server.', ephemeral: true });
 
-                    const loaRole = interaction.guild.roles.cache.find(r => r.name === 'Leave Of Absence');
+                    const loaRole = interaction.guild.roles.cache.get('YOUR_LOA_ROLE_ID_HERE'); // ← use the actual role ID
+                    if (!loaRole) return interaction.reply({ content: '❌ LOA role not found!', ephemeral: true });
+
                     const db = getDatabase();
 
                     if (action === 'yes') {
-                        if (loaRole) await member.roles.add(loaRole).catch(() => null);
+                        await member.roles.add(loaRole).catch(err => console.error('Error adding LOA role:', err));
 
-                        // ⏳ Auto-remove role after stored duration
+                        // ⏳ Auto-remove after stored duration
                         const row = await db.get(`SELECT days FROM loaRequests WHERE user_id = ?`, [requesterId]);
                         if (row && row.days) {
                             const durationMs = row.days * 24 * 60 * 60 * 1000;
@@ -101,6 +99,7 @@ module.exports = {
                         await member.send('❌ Your LOA request was denied.').catch(() => null);
                         await interaction.update({ content: `LOA denied ❌ by ${interaction.user.tag}`, components: [] });
                     }
+
                 } catch (err) {
                     console.error('LOA button error:', err);
                     if (!interaction.replied) {
