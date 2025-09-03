@@ -38,7 +38,7 @@ module.exports = {
                     const member = await interaction.guild.members.fetch(userId).catch(() => null);
                     if (!member) return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
                     
-                    const verifiedRole = interaction.guild.roles.cache.get('1412863370108993598'); // ← your verified role ID
+                    const verifiedRole = interaction.guild.roles.cache.get('1374841330936709232'); // ← your verified role ID
                     if (!verifiedRole) return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
 
                     await member.roles.add(verifiedRole).catch(err => console.error('Error adding verified role:', err));
