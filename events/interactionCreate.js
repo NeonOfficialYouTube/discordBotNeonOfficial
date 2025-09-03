@@ -8,7 +8,7 @@ module.exports = {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
             try {
-                await command.execute(interaction, client);
+                await command.execute(interaction); // 🔹 FIXED: removed client
             } catch (error) {
                 console.error('Command error:', error);
                 if (!interaction.replied && !interaction.deferred) {
