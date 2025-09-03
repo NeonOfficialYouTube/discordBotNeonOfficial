@@ -3,7 +3,7 @@ const config = require('../config');
 const logger = require('../utils/logger');
 
 module.exports = {
-    name: 'ready',
+    name: 'clientReady', // 🔹 updated for v15+
     once: true,
     async execute(client) {
         logger.info(`Bot logged in as ${client.user.tag}!`);
