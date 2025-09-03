@@ -1,90 +1,113 @@
 const config = require('../config');
+const { getDatabase } = require('../database');
 
 module.exports = {
     name: 'interactionCreate',
     async execute(interaction, client) {
-        // Handle slash commands
+        // 🔹 Handle Slash Commands
         if (interaction.isChatInputCommand()) {
             const command = client.commands.get(interaction.commandName);
             if (!command) return;
+
             try {
-                await command.execute(interaction); // 🔹 FIXED: removed client
+                await command.execute(interaction);
             } catch (error) {
                 console.error('Command error:', error);
                 if (!interaction.replied && !interaction.deferred) {
-                    await interaction.reply({ content: 'There was an error executing this command.', ephemeral: true });
+                    await interaction.reply({
+                        content: '❌ There was an error executing this command.',
+                        ephemeral: true,
+                    });
                 }
             }
             return;
         }
 
-        // Handle buttons
-        if (!interaction.isButton()) return;
+        // 🔹 Handle Buttons
+        if (interaction.isButton()) {
+            // ✅ Verification Button
+            if (interaction.customId.startsWith('verify_')) {
+                try {
+                    const userId = interaction.customId.split('_')[1];
+                    if (interaction.user.id !== userId) {
+                        return interaction.reply({ content: '❌ You cannot press this button.', ephemeral: true });
+                    }
 
-        // Verification button
-        if (interaction.customId.startsWith('verify_')) {
-            try {
-                const userId = interaction.customId.split('_')[1];
-                if (interaction.user.id !== userId) {
-                    return interaction.reply({ content: '❌ You cannot press this button.', ephemeral: true });
+                    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+                    if (!member) {
+                        return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
+                    }
+
+                    const role = interaction.guild.roles.cache.get(config.roles.verified);
+                    if (!role) {
+                        return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
+                    }
+
+                    await member.roles.add(role).catch(() => null);
+
+                    await interaction.update({
+                        content: '✅ You have been verified!',
+                        embeds: [],
+                        components: []
+                    });
+                } catch (err) {
+                    console.error('Verification button error:', err);
+                    if (!interaction.replied) {
+                        await interaction.reply({ content: 'There was an error verifying you.', ephemeral: true });
+                    }
                 }
-
-                const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                if (!member) return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
-
-                const role = interaction.guild.roles.cache.get(config.roles.verified);
-                if (!role) return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
-
-                await member.roles.add(role).catch(() => null);
-
-                await interaction.update({
-                    content: '✅ You have been verified!',
-                    embeds: [],
-                    components: []
-                });
-            } catch (err) {
-                console.error('Verification button error:', err);
-                if (!interaction.replied) {
-                    await interaction.reply({ content: 'There was an error verifying you.', ephemeral: true });
-                }
+                return;
             }
-            return;
-        }
 
-        // LOA buttons
-        if (interaction.customId.startsWith('loa-')) {
-            try {
-                const [action, requesterId] = interaction.customId.split('-'); // "loa-yes-USERID"
-                const allowedUsers = ['1345050725637685288', '1320938370586902609']; // Only these can approve/deny
+            // ✅ LOA Buttons
+            if (interaction.customId.startsWith('loa-')) {
+                try {
+                    const [_, action, requesterId] = interaction.customId.split('-'); // e.g. "loa-yes-USERID"
+                    const allowedUsers = ['1345050725637685288', '1320938370586902609']; // Approvers only
 
-                if (!allowedUsers.includes(interaction.user.id)) {
-                    return interaction.reply({ content: '❌ You are not allowed to approve/deny LOA requests.', ephemeral: true });
+                    if (!allowedUsers.includes(interaction.user.id)) {
+                        return interaction.reply({ content: '❌ You are not allowed to approve/deny LOA requests.', ephemeral: true });
+                    }
+
+                    const member = await interaction.guild.members.fetch(requesterId).catch(() => null);
+                    if (!member) {
+                        return interaction.reply({ content: '❌ User not found in the server.', ephemeral: true });
+                    }
+
+                    const loaRole = interaction.guild.roles.cache.find(r => r.name === 'Leave Of Absence');
+                    const db = getDatabase();
+
+                    if (action === 'yes') {
+                        if (loaRole) await member.roles.add(loaRole).catch(() => null);
+
+                        // ⏳ Auto-remove role after stored duration
+                        const row = await db.get(`SELECT days FROM loaRequests WHERE user_id = ?`, [requesterId]);
+                        if (row && row.days) {
+                            const durationMs = row.days * 24 * 60 * 60 * 1000;
+                            setTimeout(async () => {
+                                if (member.roles.cache.has(loaRole.id)) {
+                                    await member.roles.remove(loaRole).catch(() => null);
+                                    await member.send('⏳ Your **Leave Of Absence** has ended. The role has been removed.').catch(() => null);
+                                }
+                            }, durationMs);
+                        }
+
+                        await member.send('✅ Your LOA request has been approved.').catch(() => null);
+                        await interaction.update({ content: `LOA approved ✅ by ${interaction.user.tag}`, components: [] });
+                    }
+
+                    if (action === 'no') {
+                        await member.send('❌ Your LOA request was denied.').catch(() => null);
+                        await interaction.update({ content: `LOA denied ❌ by ${interaction.user.tag}`, components: [] });
+                    }
+                } catch (err) {
+                    console.error('LOA button error:', err);
+                    if (!interaction.replied) {
+                        await interaction.reply({ content: '❌ There was an error processing this LOA request.', ephemeral: true });
+                    }
                 }
-
-                const member = await interaction.guild.members.fetch(requesterId).catch(() => null);
-                if (!member) return interaction.reply({ content: '❌ User not found in the server.', ephemeral: true });
-
-                const loaRole = interaction.guild.roles.cache.find(r => r.name === 'Leave Of Absence');
-
-                if (action === 'loa-yes') {
-                    if (loaRole) await member.roles.add(loaRole).catch(() => null);
-                    await member.send('Your Leave Of Absence has been approved!').catch(() => null);
-                    await interaction.user.send(`✅ You approved ${member.user.tag}'s LOA.`).catch(() => null);
-
-                    await interaction.update({ content: 'LOA approved ✅', components: [] });
-                } else if (action === 'loa-no') {
-                    await member.send('Your Leave Of Absence request was not approved.').catch(() => null);
-                    await interaction.user.send(`❌ You denied ${member.user.tag}'s LOA.`).catch(() => null);
-
-                    await interaction.update({ content: 'LOA denied ❌', components: [] });
-                }
-            } catch (err) {
-                console.error('LOA button error:', err);
-                if (!interaction.replied) {
-                    await interaction.reply({ content: 'There was an error processing this LOA request.', ephemeral: true });
-                }
+                return;
             }
-            return;
         }
     }
 };
