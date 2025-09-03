@@ -38,7 +38,8 @@ module.exports = {
                         return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
                     }
 
-                    const role = interaction.guild.roles.cache.get(config.roles.verified);
+                    const loaRole = interaction.guild.roles.cache.get('1374841330936709232'); // ← put your role ID here
+                    
                     if (!role) {
                         return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
                     }
