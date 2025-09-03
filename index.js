@@ -20,17 +20,14 @@ const client = new Client({
 client.commands = new Collection();
 client.cooldowns = new Collection();
 
-// Load commands
-const commandFolders = fs.readdirSync('./commands');
-for (const folder of commandFolders) {
-    const commandFiles = fs.readdirSync(`./commands`).filter(file => file.endsWith('.js'));
-    
-    for (const file of commandFiles) {
-        const command = require(`./commands/${file}`);
-        if (command.data && command.execute) {
-            client.commands.set(command.data.name, command);
-            logger.info(`Loaded command: ${command.data.name}`);
-        }
+// Load commands (flat folder)
+const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+
+for (const file of commandFiles) {
+    const command = require(`./commands/${file}`);
+    if (command.data && command.execute) {
+        client.commands.set(command.data.name, command);
+        logger.info(`Loaded command: ${command.data.name}`);
     }
 }
 
