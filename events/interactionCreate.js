@@ -71,7 +71,7 @@ module.exports = {
                     const member = await interaction.guild.members.fetch(requesterId).catch(() => null);
                     if (!member) return interaction.reply({ content: '❌ User not found in the server.', ephemeral: true });
 
-                    const loaRole = interaction.guild.roles.cache.get('1412863370108993598'); // ← use the actual role ID
+                    const loaRole = interaction.guild.roles.cache.get('1374839812695265350'); // ← use the actual role ID
                     if (!loaRole) return interaction.reply({ content: '❌ LOA role not found!', ephemeral: true });
 
                     const db = getDatabase();
