@@ -29,6 +29,8 @@ module.exports = {
 
             // ✅ Verification Button
             if (interaction.customId.startsWith('verify_')) {
+                console.log(`Verification button pressed by ${interaction.user.tag}`);
+
                 try {
                     const userId = interaction.customId.split('_')[1];
                     if (interaction.user.id !== userId) {
@@ -36,18 +38,36 @@ module.exports = {
                     }
 
                     const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                    if (!member) return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
+                    if (!member) {
+                        return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
+                    }
                     
-                    const verifiedRole = interaction.guild.roles.cache.get('1374841330936709232'); // ← your verified role ID
-                    if (!verifiedRole) return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
+                    const verifiedRole = interaction.guild.roles.cache.get('1374841330936709232'); // your verified role ID
+                    if (!verifiedRole) {
+                        return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
+                    }
 
-                    await member.roles.add(verifiedRole).catch(err => console.error('Error adding verified role:', err));
+                    await member.roles.add(verifiedRole)
+                        .then(() => console.log(`✅ Added Verified role to ${member.user.tag}`))
+                        .catch(err => {
+                            console.error('Error adding verified role:', err);
+                            throw new Error('Failed to assign the Verified role.');
+                        });
 
-                    await interaction.update({
-                        content: '✅ You have been verified!',
-                        embeds: [],
-                        components: []
-                    });
+                    // Always respond to avoid "interaction failed"
+                    if (interaction.replied || interaction.deferred) {
+                        await interaction.followUp({ content: '✅ You have been verified!', ephemeral: true });
+                    } else {
+                        await interaction.update({
+                            content: '✅ You have been verified!',
+                            embeds: [],
+                            components: []
+                        }).catch(async () => {
+                            if (!interaction.replied) {
+                                await interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
+                            }
+                        });
+                    }
 
                 } catch (err) {
                     console.error('Verification button error:', err);
@@ -58,7 +78,7 @@ module.exports = {
                 return;
             }
 
-            // ✅ LOA Buttons
+            // ✅ LOA Buttons (unchanged, as requested)
             if (interaction.customId.startsWith('loa-')) {
                 try {
                     const [_, action, requesterId] = interaction.customId.split('-'); // e.g. "loa-yes-USERID"
@@ -71,7 +91,7 @@ module.exports = {
                     const member = await interaction.guild.members.fetch(requesterId).catch(() => null);
                     if (!member) return interaction.reply({ content: '❌ User not found in the server.', ephemeral: true });
 
-                    const loaRole = interaction.guild.roles.cache.get('1374839812695265350'); // ← use the actual role ID
+                    const loaRole = interaction.guild.roles.cache.get('1412863370108993598'); // ← your LOA role ID
                     if (!loaRole) return interaction.reply({ content: '❌ LOA role not found!', ephemeral: true });
 
                     const db = getDatabase();
