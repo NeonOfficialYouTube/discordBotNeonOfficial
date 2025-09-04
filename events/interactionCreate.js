@@ -27,56 +27,61 @@ module.exports = {
         // 🔹 Buttons
         if (interaction.isButton()) {
 
-            // ✅ Verification Button
-            if (interaction.customId.startsWith('verify_')) {
-                console.log(`Verification button pressed by ${interaction.user.tag}`);
+          // ✅ Verification Button
+if (interaction.customId.startsWith('verify_')) {
+    console.log(`Verification button pressed by ${interaction.user.tag}`);
 
-                try {
-                    const userId = interaction.customId.split('_')[1];
-                    if (interaction.user.id !== userId) {
-                        return interaction.reply({ content: '❌ You cannot press this button.', ephemeral: true });
-                    }
+    try {
+        const userId = interaction.customId.split('_')[1];
 
-                    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-                    if (!member) {
-                        return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
-                    }
-                    
-                    const verifiedRole = interaction.guild.roles.cache.get('1374841330936709232'); // your verified role ID
-                    if (!verifiedRole) {
-                        return interaction.reply({ content: '❌ Verified role not found. Check your config.', ephemeral: true });
-                    }
+        // Only the user can click their own button
+        if (interaction.user.id !== userId) {
+            return interaction.reply({ 
+                content: '❌ You cannot press this button.', 
+                ephemeral: true 
+            });
+        }
 
-                    await member.roles.add(verifiedRole)
-                        .then(() => console.log(`✅ Added Verified role to ${member.user.tag}`))
-                        .catch(err => {
-                            console.error('Error adding verified role:', err);
-                            throw new Error('Failed to assign the Verified role.');
-                        });
+        const member = await interaction.guild.members.fetch(userId).catch(() => null);
+        if (!member) {
+            return interaction.reply({ 
+                content: '❌ User not found in this server.', 
+                ephemeral: true 
+            });
+        }
 
-                    // Always respond to avoid "interaction failed"
-                    if (interaction.replied || interaction.deferred) {
-                        await interaction.followUp({ content: '✅ You have been verified!', ephemeral: true });
-                    } else {
-                        await interaction.update({
-                            content: '✅ You have been verified!',
-                            embeds: [],
-                            components: []
-                        }).catch(async () => {
-                            if (!interaction.replied) {
-                                await interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
-                            }
-                        });
-                    }
+        const verifiedRole = interaction.guild.roles.cache.get('1374841330936709232'); // your role ID
+        if (!verifiedRole) {
+            return interaction.reply({ 
+                content: '❌ Verified role not found. Check your config.', 
+                ephemeral: true 
+            });
+        }
 
-                } catch (err) {
-                    console.error('Verification button error:', err);
-                    if (!interaction.replied) {
-                        await interaction.reply({ content: '❌ There was an error verifying you.', ephemeral: true });
-                    }
-                }
-                return;
-            }
+        // Assign role
+        await member.roles.add(verifiedRole);
+        console.log(`✅ Added Verified role to ${member.user.tag}`);
+
+        // ✅ Use reply if no prior reply/update
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ 
+                content: '✅ You have been verified!', 
+                ephemeral: true 
+            });
+        }
+
+    } catch (err) {
+        console.error('Verification button error:', err);
+
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ 
+                content: '❌ There was an error verifying you.', 
+                ephemeral: true 
+            });
+        }
+    }
+    return;
+}
 
             // ✅ LOA Buttons (unchanged, as requested)
             if (interaction.customId.startsWith('loa-')) {
